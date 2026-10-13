@@ -28,5 +28,7 @@ def ridge_regression(y, tx, lambda_):
     A = tx.T @ tx + 2 * N * lambda_ * np.eye(D)
     b = tx.T @ y
     w = np.linalg.solve(A, b)
+    e = y - tx.dot(w)
+    loss = e.dot(e) / (2 * len(e)) # MEAN SQUARE ERROR
     
-    return w
+    return w, loss
