@@ -13,7 +13,7 @@ def sigmoid(t):
 
     return 1 / (1 + np.exp(-t))
 
-def calculate_loss(y, tx, w):
+def calculate_loss_log(y, tx, w):
     """compute the cost by negative log likelihood.
     Args:
         y:  shape=(N, )
@@ -31,7 +31,7 @@ def calculate_loss(y, tx, w):
     # log(1 + exp(z)) - y * z, written so that it never evaluates log(0)
     return np.mean(np.logaddexp(0, z) - y * z)
 
-def calculate_gradient(y, tx, w):
+def calculate_gradient_log(y, tx, w):
     """compute the gradient of loss.
     Args:
         y:  shape=(N, )
@@ -65,10 +65,10 @@ def logistic_regression(y, tx, initial_w, max_iters, gamma):
     w = initial_w
 
     for i in range(max_iters):
-        gradient = calculate_gradient(y, tx, w)  # Gradient
+        gradient = calculate_gradient_log(y, tx, w)  # Gradient
         w = w - gamma * gradient  # Gradient descent step
 
-    loss = calculate_loss(y, tx, w)  # Compute loss
+    loss = calculate_loss_log(y, tx, w)  # Compute loss
 
     return w, loss
 
@@ -90,9 +90,9 @@ def reg_logistic_regression(y, tx, lambda_, initial_w, max_iters, gamma):
     w = initial_w
 
     for i in range(max_iters):
-        gradient = calculate_gradient(y, tx, w) + 2 * lambda_ * w  # Penalized gradient
+        gradient = calculate_gradient_log(y, tx, w) + 2 * lambda_ * w  # Penalized gradient
         w = w - gamma * gradient  # Gradient descent step
 
-    loss = calculate_loss(y, tx, w)  # Compute loss
+    loss = calculate_loss_log(y, tx, w)  # Compute loss
 
     return w, loss
