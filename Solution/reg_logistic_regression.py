@@ -71,6 +71,7 @@ def learning_by_penalized_gradient(y, tx, w, gamma, lambda_):
            [0.17532896],
            [0.24228716]])
     """
+    
     loss, gradient = penalized_logistic_regression(y, tx, w, lambda_)
     w = w - gamma * gradient
 
