@@ -2,7 +2,7 @@
 import numpy as np
 
 
-# Logistic Regression implementation
+# Helper functions for Logistic Regression
 def sigmoid(t):
     """apply sigmoid function on t.
     Args:
@@ -48,22 +48,7 @@ def calculate_gradient(y, tx, w):
 
     return tx.T @ (sigma - y) / y.shape[0]
 
-def learning_by_gradient_descent(y, tx, w, gamma):
-    """
-    Do one step of gradient descent using logistic regression. Return the updated w.
-    Args:
-        y:  shape=(N, )
-        tx: shape=(N, D)
-        w:  shape=(D, )
-        gamma: float
-    Returns:
-        w: shape=(D, )
-    """
-
-    gradient = calculate_gradient(y, tx, w)
-    w = w - gamma * gradient
-
-    return w
+# Logistic Regression implementation
 
 def logistic_regression(y, tx, initial_w, max_iters, gamma):
     """Logistic regression using gradient descent.
@@ -77,49 +62,17 @@ def logistic_regression(y, tx, initial_w, max_iters, gamma):
         w: last weight vector, shape=(D, )
         loss: loss at the last w, scalar
     """
-
     w = initial_w
-    for i in range(max_iters):
-        w = learning_by_gradient_descent(y, tx, w, gamma)
 
-    loss = calculate_loss(y, tx, w)
+    for i in range(max_iters):
+        gradient = calculate_gradient(y, tx, w)  # Gradient
+        w = w - gamma * gradient  # Gradient descent step
+
+    loss = calculate_loss(y, tx, w)  # Compute loss
 
     return w, loss
 
 # Regularized Logistic Regression implementation
-
-def penalized_logistic_regression(y, tx, w, lambda_):
-    """return the gradient of the penalized loss.
-    Args:
-        y:  shape=(N, )
-        tx: shape=(N, D)
-        w:  shape=(D, )
-        lambda_: scalar
-    Returns:
-        gradient: shape=(D, )
-    """
-
-    gradient = calculate_gradient(y, tx, w) + 2 * lambda_ * w
-
-    return gradient
-
-def learning_by_penalized_gradient(y, tx, w, gamma, lambda_):
-    """
-    Do one step of gradient descent, using the penalized logistic regression. Return the updated w.
-    Args:
-        y:  shape=(N, )
-        tx: shape=(N, D)
-        w:  shape=(D, )
-        gamma: scalar
-        lambda_: scalar
-    Returns:
-        w: shape=(D, )
-    """
-    
-    gradient = penalized_logistic_regression(y, tx, w, lambda_)
-    w = w - gamma * gradient
-
-    return w
 
 def reg_logistic_regression(y, tx, lambda_, initial_w, max_iters, gamma):
     """Regularized logistic regression using gradient descent.
@@ -134,11 +87,12 @@ def reg_logistic_regression(y, tx, lambda_, initial_w, max_iters, gamma):
         w: last weight vector, shape=(D, )
         loss: loss at the last w, scalar
     """
-
     w = initial_w
-    for i in range(max_iters):
-        w = learning_by_penalized_gradient(y, tx, w, gamma, lambda_)
 
-    loss = calculate_loss(y, tx, w)
+    for i in range(max_iters):
+        gradient = calculate_gradient(y, tx, w) + 2 * lambda_ * w  # Penalized gradient
+        w = w - gamma * gradient  # Gradient descent step
+
+    loss = calculate_loss(y, tx, w)  # Compute loss
 
     return w, loss
