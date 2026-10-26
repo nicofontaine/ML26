@@ -2,6 +2,8 @@
 import numpy as np
 
 
+#######
+
 # Helper functions for Logistic Regression
 def sigmoid(t):
     """apply sigmoid function on t.
@@ -96,3 +98,5 @@ def reg_logistic_regression(y, tx, lambda_, initial_w, max_iters, gamma):
     loss = calculate_loss_log(y, tx, w)  # Compute loss
 
     return w, loss
+
+######
