@@ -309,12 +309,12 @@ def derived_features(x_all, names, x_imputed, params):
         # not equal to 1, so they count as 0
         answers = x_all[:, [names.index(n) for n in COMORBIDITY_COLUMNS]]
         derived["COMORBIDITY"] = np.sum(answers == 1, axis=1).astype(float)
-    if params["age80_square"] is not None:
+    if params["age80_mean"] is not None:
         # Square of the centered age: for ages 18-80 the plain square is almost a
         # straight line in age (it would be dropped as a near-duplicate), while
         # (age - mean)^2 captures risk rising faster at older and younger ages
         age = x_imputed[:, params["columns"].index("_AGE80")]
-        derived["_AGE80^2"] = (age - params["age80_square"]) ** 2
+        derived["_AGE80^2"] = (age - params["age80_mean"]) ** 2
     return derived
 
 
@@ -409,7 +409,7 @@ def fit_preprocessing(
         "flags": [],
         "dropped_flags": [],
         "comorbidity": comorbidity,
-        "age80_square": None,  # training mean of _AGE80 when age80 is used
+        "age80_mean": None,  # training mean of _AGE80 when age80 is used
     }
     continuous = []
     for j, name in enumerate(columns):
@@ -455,7 +455,7 @@ def fit_preprocessing(
         # the centered age (see derived_features)
         inter = ["_AGE80" if n == "_AGEG5YR" else n for n in inter]
         age = x[:, columns.index("_AGE80")]
-        params["age80_square"] = float(np.nanmean(age))
+        params["age80_mean"] = float(np.nanmean(age))
     if comorbidity and inter:
         inter.append("COMORBIDITY")
 

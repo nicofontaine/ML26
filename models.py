@@ -1,4 +1,9 @@
-"""Extensions of the basic methods in implementations.py, used for the final model."""
+"""Extension of the methods in implementations.py, tested as an improvement.
+
+Class weighting gave no gain once the decision threshold is tuned (see
+"python experiments.py improvements"), so the final model in run.py does not
+use it.
+"""
 
 import numpy as np
 
@@ -33,7 +38,7 @@ def weighted_reg_logistic_regression(
     weights = weights / weights.mean()
 
     w = initial_w
-    for i in range(max_iters):
+    for _ in range(max_iters):
         sigma = sigmoid(tx @ w)
         gradient = tx.T @ (weights * (sigma - y)) / len(y) + 2 * lambda_ * w
         w = w - gamma * gradient

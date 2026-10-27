@@ -2,3 +2,7 @@ dataset/
 .DS_Store
 
 __pycache__/
+
+# Course test suite (run from a local copy, not part of the submission) and editor settings
+grading_tests/
+.vscode/
