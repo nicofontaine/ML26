@@ -96,7 +96,7 @@ def f1_score(y_true, y_pred):
 def best_threshold(y, scores):
     """Search score quantiles for a threshold with a high F1 score.
 
-    Checking 101 quantiles is a simple approximation to checking every
+    Checking 100 quantiles is a simple approximation to checking every
     possible threshold. It works with probabilities or raw model scores.
 
     Args:
@@ -107,9 +107,11 @@ def best_threshold(y, scores):
         threshold: scalar, predict 1 when score >= threshold
         f1: F1 score obtained with this threshold
     """
-    # Sample thresholds across the full score range. Including the minimum
-    # lets the search consider predicting every sample as positive.
-    candidates = np.quantile(scores, np.linspace(0.0, 1.0, 101))
+    # Thresholds between the 50% and 99.5% score quantiles, i.e. between 0.5% and
+    # 50% of the points predicted positive. With ~9% positives the best threshold
+    # always lies in this range, and the fine 0.5% step matters there. run.py
+    # depends on this grid: changing it changes the submission.
+    candidates = np.quantile(scores, np.linspace(0.5, 0.995, 100))
     f1s = [f1_score(y, (scores >= t).astype(float)) for t in candidates]
     best = int(np.argmax(f1s))
     return candidates[best], f1s[best]
@@ -180,6 +182,10 @@ def cross_validate(x, y, names, models, k_fold=5, seed=1, prep_kwargs=None):
 
 
 def print_results(results):
-    """Print mean and standard deviation of the validation F1 of each model."""
+    """Print mean, standard deviation and per-fold values of the validation F1."""
     for name, res in results.items():
-        print(f"{name:45s} F1 = {res['f1'].mean():.4f} +/- {res['f1'].std():.4f}")
+        folds = " ".join(f"{f:.4f}" for f in res["f1"])
+        print(
+            f"{name:45s} F1 = {res['f1'].mean():.4f} +/- {res['f1'].std():.4f}"
+            f"   folds: {folds}"
+        )

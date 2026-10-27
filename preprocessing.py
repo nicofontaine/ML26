@@ -263,6 +263,7 @@ def fit_preprocessing(
     corr_sample=50000,
     seed=0,
     interaction_columns=None,
+    group_column=None,
 ):
     """Compute all preprocessing statistics on the training set.
 
@@ -280,6 +281,7 @@ def fit_preprocessing(
         10. drop constant features, and features with |correlation| above corr_thresh
             with an earlier feature (flags and products come last, so they are
             dropped first)
+        11. optionally, the groups of group_column for separate models per group
 
     Args:
         x_train: training data, shape=(N, 321)
@@ -296,6 +298,8 @@ def fit_preprocessing(
         seed: random seed for the correlation sample
         interaction_columns: list of column names to build degree-2 features from,
             or None for no interaction features
+        group_column: column name (e.g. "SEX") whose values define groups that each
+            get their own weights (see transform), or None for one model for everyone
 
     Returns:
         params: dict used by transform
@@ -380,7 +384,41 @@ def fit_preprocessing(
 
     params["selected"] = selected
     params["feature_names"] = [feature_names[j] for j in selected]
+
+    # Groups for separate models: every value with at least 1% of the rows is a
+    # group; rarer or missing values join the largest group
+    params["group"] = None
+    if group_column is not None:
+        col = x_train[:, [names.index(group_column)]]
+        col = clean(col, [group_column], codes)[:, 0]
+        values, counts = np.unique(col[~np.isnan(col)], return_counts=True)
+        common = counts >= 0.01 * len(col)
+        params["group"] = {
+            "column": group_column,
+            "values": values[common],
+            "default": int(np.argmax(counts[common])),
+        }
     return params
+
+
+def group_index(x, names, params):
+    """Group number (0 to G-1) of every row, for the per-group models.
+
+    Args:
+        x: data with all original columns, shape=(N, 321)
+        names: list of the original column names
+        params: output of fit_preprocessing, with a group_column
+
+    Returns:
+        group number of each row, shape=(N,)
+    """
+    group = params["group"]
+    col = x[:, [list(names).index(group["column"])]]
+    col = clean(col, [group["column"]], params["codes"])[:, 0]
+    index = np.full(len(col), group["default"])
+    for k, value in enumerate(group["values"]):
+        index[col == value] = k
+    return index
 
 
 def transform(x, names, params, add_bias=True):
@@ -393,11 +431,21 @@ def transform(x, names, params, add_bias=True):
         add_bias: whether to add a first column of ones
 
     Returns:
-        tx: standardized features, shape=(N, F) or (N, F + 1) with the bias
+        tx: standardized features, shape=(N, F) or (N, F + 1) with the bias;
+            with G groups, G times as many columns (see below)
     """
     x_enc, _ = encode(x, list(names), params)
     selected = params["selected"]
     tx = (x_enc[:, selected] - params["mean"][selected]) / params["std"][selected]
     if add_bias:
         tx = np.c_[np.ones(tx.shape[0]), tx]
+
+    # Separate models per group: one copy of all features (and the bias) per
+    # group, set to 0 for the rows outside that group. A linear model on this
+    # matrix has one independent weight vector per group, which is the same as
+    # training one model per group (with a shared lambda and step size).
+    if params.get("group") is not None:
+        index = group_index(x, names, params)
+        n_groups = len(params["group"]["values"])
+        tx = np.hstack([tx * (index == k)[:, None] for k in range(n_groups)])
     return tx
