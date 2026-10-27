@@ -3,9 +3,9 @@
 All statistics (which columns to keep, missing codes, fill values, categories,
 clipping bounds, which columns to log-transform, mean and std, which features
 to drop as redundant) are computed on the training set only by
-`fit_preprocessing` and then applied unchanged to any data set by `transform`,
+'fit_preprocessing' and then applied unchanged to any data set by 'transform',
 so train and test are processed identically and no information leaks from the
-test set. When cross-validating, call `fit_preprocessing` on each training fold.
+test set. When cross-validating, call 'fit_preprocessing' on each training fold.
 
 Typical use:
     names = load_feature_names("dataset")
