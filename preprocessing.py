@@ -94,6 +94,25 @@ INTERACTION_COLUMNS = [
 # Computed (non-integer) columns whose missing value is a single sentinel
 SENTINELS = {"DROCDY3_": 900, "_DRNKWEK": 99900, "MAXVO2_": 999, "FC60_": 999}
 
+# Extra sentinel used with age_fix=True: in _AGEG5YR (13 five-year age groups),
+# 14 means "don't know / refused", not an age group above 80
+AGE_SENTINELS = {"_AGEG5YR": 14}
+
+# "Has a doctor ever told you that you have ...?" questions, counted by the
+# comorbidity feature. Code 1 = yes in all of them. Codes that are not a plain
+# yes count as no: BPHIGH4 2 = only during pregnancy, 4 = borderline; DIABETE3
+# 2 = only during pregnancy, 4 = pre-diabetes; 7/9 = don't know / refused.
+COMORBIDITY_COLUMNS = [
+    "BPHIGH4",
+    "TOLDHI2",
+    "DIABETE3",
+    "CVDSTRK3",
+    "CHCKIDNY",
+    "CHCCOPD1",
+    "HAVARTH3",
+    "ADDEPEV2",
+]
+
 
 def load_feature_names(data_path):
     """Read the feature names from the header of x_train.csv.
@@ -204,12 +223,14 @@ def encode(x, names, params):
         feature_names: list of the F feature names
     """
     columns = params["columns"]
+    x_all = x
     x = x[:, [names.index(n) for n in columns]]
     x = clean(x, columns, params["codes"])
     missing = np.isnan(x)
 
     # Impute missing values with the training median (numeric) or mode (categorical)
     x[missing] = np.take(params["fill"], np.nonzero(missing)[1])
+    derived = derived_features(x_all, names, x, params)
 
     blocks, feature_names = [], []
     for j, name in enumerate(columns):
@@ -229,24 +250,67 @@ def encode(x, names, params):
         blocks.append(col[:, None])
         feature_names.append(name)
 
+    # Features computed from several columns (comorbidity count, age squared)
+    for name, col in derived.items():
+        blocks.append(col[:, None])
+        feature_names.append(name)
+
     # Missing-value flags: answering "don't know" or skipping a question can itself
     # be informative. Taken from `missing`, i.e. before imputation.
     for name in params["flags"]:
         blocks.append(missing[:, [columns.index(name)]].astype(float))
         feature_names.append(f"{name}_missing")
 
+    # Flags for the columns dropped as mostly missing: the column itself is gone,
+    # but whether the question was answered at all is kept (most of these
+    # questions are only asked to some respondents)
+    dropped = params["dropped_flags"]
+    if dropped:
+        x_dropped = x_all[:, [names.index(n) for n in dropped]]
+        x_dropped = clean(x_dropped, dropped, params["codes"])
+        blocks.append(np.isnan(x_dropped).astype(float))
+        feature_names += [f"{name}_missing" for name in dropped]
+
     # Degree-2 features of a few strong predictors: squares and pairwise products
     # of their imputed values, so a linear model can capture e.g. risk that rises
     # faster with age when blood pressure is high
+    def values(name):
+        return derived[name] if name in derived else x[:, columns.index(name)]
+
     inter = params["interactions"]
     for a in range(len(inter)):
         for b in range(a, len(inter)):
-            col_a = x[:, columns.index(inter[a])]
-            col_b = x[:, columns.index(inter[b])]
-            blocks.append((col_a * col_b)[:, None])
+            blocks.append((values(inter[a]) * values(inter[b]))[:, None])
             feature_names.append(f"{inter[a]}*{inter[b]}")
 
     return np.hstack(blocks), feature_names
+
+
+def derived_features(x_all, names, x_imputed, params):
+    """Features computed from several columns, as enabled in params.
+
+    Args:
+        x_all: data with all original columns, shape=(N, 321)
+        names: list of the original column names
+        x_imputed: cleaned and imputed kept columns (params["columns"]), shape=(N, D)
+        params: output of fit_preprocessing
+
+    Returns:
+        dict {feature name: values, shape=(N,)}, in a fixed order
+    """
+    derived = {}
+    if params["comorbidity"]:
+        # Number of "yes" (code 1) answers; missing, don't know and refused are
+        # not equal to 1, so they count as 0
+        answers = x_all[:, [names.index(n) for n in COMORBIDITY_COLUMNS]]
+        derived["COMORBIDITY"] = np.sum(answers == 1, axis=1).astype(float)
+    if params["age80_square"] is not None:
+        # Square of the centered age: for ages 18-80 the plain square is almost a
+        # straight line in age (it would be dropped as a near-duplicate), while
+        # (age - mean)^2 captures risk rising faster at older and younger ages
+        age = x_imputed[:, params["columns"].index("_AGE80")]
+        derived["_AGE80^2"] = (age - params["age80_square"]) ** 2
+    return derived
 
 
 def fit_preprocessing(
@@ -264,19 +328,26 @@ def fit_preprocessing(
     seed=0,
     interaction_columns=None,
     group_column=None,
+    age_fix=False,
+    dropped_flags=False,
+    comorbidity=False,
+    age80=False,
 ):
     """Compute all preprocessing statistics on the training set.
 
     Steps:
         1. drop administrative and redundant columns
-        2. find survey codes for "don't know" / "refused" / "none"
+        2. find survey codes for "don't know" / "refused" / "none" (age_fix: also
+           _AGEG5YR = 14)
         3. drop columns with more than max_missing missing values, and constant columns
+           (dropped_flags: keep a missing-value flag for the mostly-missing ones)
         4. split the columns into categorical (integer, 3 to max_categories values)
            and numeric; numeric columns with more than max_categories values are continuous
         5. fill values: mode for categorical columns, median for the others
         6. continuous columns only: clipping bounds and which ones to log-transform
         7. missing-value flags for the columns that have missing values
-        8. squares and pairwise products of the interaction_columns
+        8. optional derived features (comorbidity count, age squared), then squares
+           and pairwise products of the interaction_columns
         9. mean and std of the encoded features, for standardization
         10. drop constant features, and features with |correlation| above corr_thresh
             with an earlier feature (flags and products come last, so they are
@@ -300,6 +371,14 @@ def fit_preprocessing(
             or None for no interaction features
         group_column: column name (e.g. "SEX") whose values define groups that each
             get their own weights (see transform), or None for one model for everyone
+        age_fix: whether to treat _AGEG5YR = 14 ("don't know / refused") as missing
+            (AGE_SENTINELS) instead of as the oldest age group
+        dropped_flags: whether to keep a 0/1 "was missing" feature for each column
+            dropped because of max_missing
+        comorbidity: whether to add COMORBIDITY, the number of "yes" answers to the
+            COMORBIDITY_COLUMNS questions (also added to the interactions, if any)
+        age80: whether to use exact age: adds _AGE80^2, the square of the
+            centered age, and _AGE80 replaces _AGEG5YR in the interactions
 
     Returns:
         params: dict used by transform
@@ -310,6 +389,9 @@ def fit_preprocessing(
 
     x = x_train[:, [names.index(n) for n in columns]]
     codes = find_missing_codes(x, columns)
+    if age_fix:
+        for name, code in AGE_SENTINELS.items():
+            codes[name] = ([code], [])
     x = clean(x, columns, codes)
 
     params = {
@@ -320,12 +402,18 @@ def fit_preprocessing(
         "clip": {},
         "log": set(),
         "flags": [],
+        "dropped_flags": [],
+        "comorbidity": comorbidity,
+        "age80_square": None,  # training mean of _AGE80 when age80 is used
     }
     continuous = []
     for j, name in enumerate(columns):
         col = x[:, j]
         values = col[~np.isnan(col)]
-        if np.isnan(col).mean() > max_missing or np.unique(values).size < 2:
+        too_sparse = np.isnan(col).mean() > max_missing
+        if too_sparse and dropped_flags and values.size > 0:
+            params["dropped_flags"].append(name)
+        if too_sparse or np.unique(values).size < 2:
             continue
 
         unique, counts = np.unique(values, return_counts=True)
@@ -356,10 +444,20 @@ def fit_preprocessing(
         if log_transform and abs(skewness(col[:, None])[0]) > skew_thresh:
             params["log"].add(name)
 
-    # Only columns that survived the selection above can be used for products
-    params["interactions"] = [
-        n for n in (interaction_columns or []) if n in params["columns"]
-    ]
+    inter = list(interaction_columns or [])
+    if age80 and "_AGE80" in params["columns"]:
+        # Exact age instead of 5-year groups in the products, plus the square of
+        # the centered age (see derived_features)
+        inter = ["_AGE80" if n == "_AGEG5YR" else n for n in inter]
+        age = x[:, columns.index("_AGE80")]
+        params["age80_square"] = float(np.nanmean(age))
+    if comorbidity and inter:
+        inter.append("COMORBIDITY")
+
+    # Only columns that survived the selection above (or derived features) can
+    # be used for products
+    available = set(params["columns"]) | ({"COMORBIDITY"} if comorbidity else set())
+    params["interactions"] = [n for n in inter if n in available]
 
     x_enc, feature_names = encode(x_train, names, params)
     params["mean"] = x_enc.mean(axis=0)

@@ -4,6 +4,7 @@ Run from the repository root, with the data in dataset/:
     python experiments.py methods        # compare the six basic methods
     python experiments.py improvements   # class weighting and interaction features
     python experiments.py groups         # separate models per sex / age group
+    python experiments.py features       # ablation of the feature options
 
 All experiments use the same 5 folds (seed 1), so their numbers are comparable.
 """
@@ -106,6 +107,63 @@ def compare_groups(x, y, names):
         print_results(cross_validate(x, y, names, models, K_FOLD, SEED, prep))
 
 
+def compare_features(x, y, names):
+    """Ablation of the feature options of fit_preprocessing, on the same folds.
+
+    Every variant is the current model (reg_logistic, lambda=1e-4, gamma=0.3,
+    500 iterations, interaction features) with one option changed. The "best
+    combination" combines every option whose mean F1 is above the baseline's;
+    it is chosen on these same folds, so its estimate is slightly optimistic.
+    """
+    models = {
+        "reg_logistic": lambda y, tx: reg_logistic_regression(
+            y, tx, 1e-4, zeros(tx), 500, 0.3
+        )[0]
+    }
+    base = {"interaction_columns": INTERACTION_COLUMNS}
+    variants = {
+        "baseline": {},
+        "age fix": {"age_fix": True},
+        "flags for dropped columns": {"dropped_flags": True},
+        "max_missing=0.95": {"max_missing": 0.95},
+        "comorbidity count": {"comorbidity": True},
+        "_AGE80 features": {"age80": True},
+    }
+
+    f1 = {}
+    for label, options in variants.items():
+        res = cross_validate(x, y, names, models, K_FOLD, SEED, {**base, **options})
+        f1[label] = res["reg_logistic"]["f1"]
+        print(f"done: {label} ({f1[label].mean():.4f})", flush=True)
+
+    baseline = f1["baseline"]
+    better = [
+        label
+        for label in variants
+        if label != "baseline" and f1[label].mean() > baseline.mean()
+    ]
+    if better:
+        combined = {}
+        for label in better:
+            combined.update(variants[label])
+        label = "best combination: " + " + ".join(better)
+        res = cross_validate(x, y, names, models, K_FOLD, SEED, {**base, **combined})
+        f1[label] = res["reg_logistic"]["f1"]
+    else:
+        print("no option beat the baseline, so there is no combination to test")
+
+    # Results table: change from baseline, and on how many folds it was better
+    print()
+    print(f"{'variant':60s} {'F1 (mean +/- std)':18s} {'change':>8s}  better folds")
+    for label, scores in f1.items():
+        diff = scores - baseline
+        print(
+            f"{label:60s} {scores.mean():.4f} +/- {scores.std():.4f}"
+            f" {diff.mean():+8.4f}  {np.sum(diff > 0)}/{len(diff)}"
+        )
+    print(f"\nthreshold for changing the defaults: change > {baseline.std():.4f}")
+
+
 if __name__ == "__main__":
     experiment = sys.argv[1] if len(sys.argv) > 1 else "improvements"
     x, y, names = load_data()
@@ -113,5 +171,6 @@ if __name__ == "__main__":
         "methods": compare_methods,
         "improvements": compare_improvements,
         "groups": compare_groups,
+        "features": compare_features,
     }
     experiments[experiment](x, y, names)
