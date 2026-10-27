@@ -76,6 +76,11 @@ REDUNDANT_COLUMNS = [
     "STRENGTH",
 ]
 
+# Questions only asked to people who report a heart attack, which is part of the
+# label (MICHD). Even whether they were answered reveals the label (everyone who
+# answered HAREHAB1 in the training data is positive), so they are never used.
+OUTCOME_ROUTED_COLUMNS = ["HAREHAB1"]
+
 # Strongest predictors of the plain logistic model, plus BMI and smoking
 INTERACTION_COLUMNS = [
     "_AGEG5YR",
@@ -336,7 +341,7 @@ def fit_preprocessing(
     """Compute all preprocessing statistics on the training set.
 
     Steps:
-        1. drop administrative and redundant columns
+        1. drop administrative, redundant and outcome-routed columns
         2. find survey codes for "don't know" / "refused" / "none" (age_fix: also
            _AGEG5YR = 14)
         3. drop columns with more than max_missing missing values, and constant columns
@@ -384,7 +389,7 @@ def fit_preprocessing(
         params: dict used by transform
     """
     names = list(names)
-    dropped = set(ADMIN_COLUMNS) | set(REDUNDANT_COLUMNS)
+    dropped = set(ADMIN_COLUMNS) | set(REDUNDANT_COLUMNS) | set(OUTCOME_ROUTED_COLUMNS)
     columns = [n for n in names if n not in dropped]
 
     x = x_train[:, [names.index(n) for n in columns]]
