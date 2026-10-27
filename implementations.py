@@ -135,7 +135,7 @@ def ridge_regression(y, tx, lambda_):
     return w, loss
 
 
-# ---------- Logistic regression (labels in {0, 1}) ----------
+# ---------- Logistic regression ----------
 
 
 def sigmoid(t):
