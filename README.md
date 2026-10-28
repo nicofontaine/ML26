@@ -33,11 +33,11 @@ Everything is implemented with NumPy only (plus matplotlib for the figures).
 | `cross_validation.py` | Stratified k-fold cross-validation, F1 score, choice of the decision threshold. |
 | `run.py` | Reproduces our final submission. `FINAL_PREPROCESSING` holds the preprocessing options of the final model. |
 | `experiments.py` | The cross-validation experiments behind the tables of the report. |
-| `plots.py` | The figures of the report. |
+| `plots.py` | The figure of the report, and the convergence numbers quoted in its text. |
 | `models.py` | Class-weighted logistic regression, tested as an improvement but not used in the final model. |
 | `helpers.py` | Data loading and submission writing, provided by the course. |
 | `results/` | Saved output of every experiment (see below). |
-| `figures/` | The figures of the report (PDF and PNG). |
+| `figures/` | The figure of the report, `lambda_threshold.pdf` (and a PNG copy). |
 | `submission.csv` | Our submission, as written by `run.py`. |
 
 ## Final model
@@ -87,12 +87,11 @@ on the training folds, never on the validation fold.
 
 | Command | What it compares | Output | Time |
 |---|---|---|---|
-| `python experiments.py methods` | The six methods of `implementations.py`, several lambdas and iteration counts | `results/methods.txt` | ~15 min |
-| `python experiments.py improvements` | Class weighting (positive weight 1, 3, balanced), with and without interaction features | `results/improvements.txt` | ~12 min |
-| `python experiments.py groups` | One model vs. separate models per sex / per age group | `results/groups.txt` | ~15 min |
-| `python experiments.py features` | Each preprocessing option of the final model, one at a time and all together | `results/features.txt` | ~40 min |
+| `python experiments.py methods` | Table I: the six methods of `implementations.py` | `results/methods.txt` | ~10 min |
+| `python experiments.py features` | Each preprocessing option of the final model, one at a time and all together | `results/features.txt` | ~35 min |
+| `python experiments.py improvements` | Class weighting (positive weight 1, 3 and balanced) | `results/improvements.txt` | ~6 min |
 | `python experiments.py final` | Plain reg. logistic vs. previous final model vs. final model, per fold | `results/final_comparison.txt` | ~10 min |
-| `python plots.py all` | Figures: F1 against lambda, against the decision threshold, and training loss against iterations | `figures/`, `results/plots.txt` | ~30 min |
+| `python plots.py all` | Fig. 1 (F1 against lambda and against the decision threshold) and the convergence numbers | `figures/`, `results/plots.txt` | ~30 min |
 | `python run.py` | Final model on the full training set | `submission.csv`, `results/run.txt` | ~2 min |
 
 To save an output, redirect it, e.g. `python experiments.py final > results/final_comparison.txt`.
@@ -109,10 +108,10 @@ To save an output, redirect it, e.g. `python experiments.py final > results/fina
 | + missing flags, max_missing 0.95, comorbidity count, exact age (**final model**) | **0.4318 ± 0.0043** |
 
 The final model is better than the previous one on all 5 folds (+0.0026 on
-average). The previous final model scored F1 = 0.441 on the AIcrowd test set.
+average). On the AIcrowd test set it scored F1 = 0.446 (accuracy 0.877),
+against 0.441 for the previous final model.
 
 What mattered most is the decision threshold: with the default threshold 0.5
 the final model reaches only F1 = 0.236, against 0.432 with the threshold that
-maximizes F1 (a probability of about 0.21). Class weighting, separate models per
-sex or age group, and treating the unknown age group as missing did not improve
-the F1 (see `results/`).
+maximizes F1 (a probability of about 0.21). Class weighting did not improve the
+F1 once the threshold is tuned (see `results/`).
