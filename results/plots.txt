@@ -1,0 +1,63 @@
+Loading data...
+Preprocessing...
+  fold 1/5 preprocessed
+  fold 2/5 preprocessed
+  fold 3/5 preprocessed
+  fold 4/5 preprocessed
+  fold 5/5 preprocessed
+  lambda 1.0e-06 done
+  lambda 3.2e-06 done
+  lambda 1.0e-05 done
+  lambda 3.2e-05 done
+  lambda 1.0e-04 done
+  lambda 3.2e-04 done
+  lambda 1.0e-03 done
+  lambda 3.2e-03 done
+  lambda 1.0e-02 done
+  lambda 3.2e-02 done
+  lambda 1.0e-01 done
+
+Figure 1: F1 and loss (without penalty) against lambda, 5 folds
+   lambda         train F1    validation F1  train loss   val. loss
+  1.0e-06  0.4372 +/- 0.0012  0.4317 +/- 0.0045      0.2188      0.2203
+  3.2e-06  0.4373 +/- 0.0012  0.4317 +/- 0.0045      0.2188      0.2203
+  1.0e-05  0.4373 +/- 0.0012  0.4318 +/- 0.0045      0.2188      0.2203
+  3.2e-05  0.4372 +/- 0.0012  0.4321 +/- 0.0041      0.2188      0.2204
+  1.0e-04  0.4373 +/- 0.0012  0.4318 +/- 0.0043      0.2189      0.2204
+  3.2e-04  0.4372 +/- 0.0012  0.4316 +/- 0.0046      0.2190      0.2205
+  1.0e-03  0.4371 +/- 0.0012  0.4320 +/- 0.0042      0.2199      0.2213
+  3.2e-03  0.4365 +/- 0.0013  0.4314 +/- 0.0042      0.2239      0.2251
+  1.0e-02  0.4342 +/- 0.0015  0.4301 +/- 0.0038      0.2391      0.2399
+  3.2e-02  0.4293 +/- 0.0012  0.4259 +/- 0.0049      0.2818      0.2823
+  1.0e-01  0.4230 +/- 0.0013  0.4215 +/- 0.0065      0.3726      0.3729
+highest mean validation F1: lambda = 3.2e-05 (0.4321)
+
+Figure 2: validation scores against the probability threshold
+threshold 0.5 (default): F1 = 0.2363 +/- 0.0046
+best threshold 0.21: F1 = 0.4321 +/- 0.0040, precision 0.360, recall 0.540
+share predicted positive at 0.21: 13.2%
+threshold chosen on the training folds (as in run.py): 0.211 +/- 0.005
+  gamma 0.01 done
+  gamma 0.05 done
+  gamma 0.1 done
+  gamma 0.3 done
+  gamma 1.0 done
+
+Figure 3: training loss (fold 1) after n gradient descent steps
+ gamma     n=100     n=250     n=500    n=1000
+  0.01   0.53192   0.41530   0.32569   0.26459
+  0.05   0.32523   0.25196   0.22975   0.22187
+   0.1   0.26412   0.22970   0.22186   0.21953
+   0.3   0.22658   0.22014   0.21904   0.21860
+     1   0.34789   0.34163   0.33835   0.33508
+gamma=0.3: loss after 500 steps matches reg_logistic_regression (0.219040); relative change 500 -> 1000 steps: -0.20%
+
+Files created:
+  figures/lambda_cv.pdf
+  figures/lambda_cv.png
+  figures/threshold_f1.pdf
+  figures/threshold_f1.png
+  figures/convergence.pdf
+  figures/convergence.png
+  figures/lambda_threshold.pdf
+  figures/lambda_threshold.png
