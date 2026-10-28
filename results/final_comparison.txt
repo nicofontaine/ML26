@@ -1,0 +1,7 @@
+(a) reg_logistic, no interactions      F1 = 0.4278 +/- 0.0050   folds: 0.4320 0.4186 0.4323 0.4276 0.4283
+(b) previous final (interactions)      F1 = 0.4292 +/- 0.0048   folds: 0.4334 0.4206 0.4322 0.4275 0.4324
+(c) new final (FINAL_PREPROCESSING)    F1 = 0.4318 +/- 0.0043   folds: 0.4351 0.4257 0.4357 0.4275 0.4351
+
+(c) new final (FINAL_PREPROCESSING) vs (b) previous final (interactions): mean difference +0.0026, std of the per-fold differences 0.0017, better on 5/5 folds
+(c) new final (FINAL_PREPROCESSING) vs (a) reg_logistic, no interactions: mean difference +0.0040, std of the per-fold differences 0.0026, better on 4/5 folds
+(b) previous final (interactions) vs (a) reg_logistic, no interactions: mean difference +0.0015, std of the per-fold differences 0.0015, better on 3/5 folds
