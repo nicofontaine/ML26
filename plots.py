@@ -1,20 +1,20 @@
-"""Figures for the report.
+"""Figure and convergence numbers of the report.
 
 Run from the repository root, with the data in dataset/:
-    python plots.py [lambda|threshold|convergence|all]     (default: all)
+    python plots.py [figure|convergence|all]     (default: all)
 
-    lambda       Figure 1: train and validation F1 against lambda (5-fold CV)
-    threshold    Figure 2: validation F1, precision and recall against the
-                 decision threshold on the predicted probability
-    convergence  Figure 3: training loss against gradient descent iterations,
-                 for several step sizes gamma
-    all          all three, plus figures 1 and 2 side by side (full width)
+    figure       Fig. 1 of the report (figures/lambda_threshold.pdf/.png):
+                 (a) train and validation F1 against lambda (5-fold CV),
+                 (b) validation F1, precision and recall against the decision
+                 threshold on the predicted probability
+    convergence  training loss against gradient descent iterations for several
+                 step sizes gamma (numbers quoted in the text, no figure)
+    all          both
 
 Same setup as run.py (FINAL_PREPROCESSING, lambda = 1e-4, gamma = 0.3, 500
 iterations, w0 = 0, labels in {0, 1}) and the same 5 stratified folds as
 experiments.py (seed 1). The preprocessing is fitted once per fold, on its
-training part only, and shared by the three figures. Figures are saved as PDF
-and PNG in figures/; the numbers behind them are printed.
+training part only. The numbers behind the figure are printed.
 """
 
 import os
@@ -47,13 +47,12 @@ LAMBDA = 1e-4
 GAMMA = 0.3
 MAX_ITERS = 500
 
-LAMBDAS = np.logspace(-6, -1, 11)  # figure 1
-THRESHOLDS = np.linspace(0.02, 0.7, 69)  # figure 2, on the predicted probability
-GAMMAS = [0.01, 0.05, 0.1, 0.3, 1.0]  # figure 3
-CONVERGENCE_ITERS = 1000  # figure 3
+LAMBDAS = np.logspace(-6, -1, 11)  # Fig. 1a
+THRESHOLDS = np.linspace(0.02, 0.7, 69)  # Fig. 1b, on the predicted probability
+GAMMAS = [0.01, 0.05, 0.1, 0.3, 1.0]  # convergence
+CONVERGENCE_ITERS = 1000  # convergence
 
-COLUMN_SIZE = (3.5, 2.5)  # one IEEE column, in inches
-FULL_SIZE = (7.0, 2.5)  # both columns
+FULL_SIZE = (7.0, 2.5)  # both IEEE columns, in inches
 plt.rcParams.update(
     {
         "font.size": 8,
@@ -100,7 +99,7 @@ def prepare_folds(x, y, names, which):
 def trained_weights(folds, k, lambda_, cache):
     """Weights of reg_logistic_regression on the training part of fold k.
 
-    Trained once per (lambda_, fold) and cached, so figures 1 and 2 share them.
+    Trained once per (lambda_, fold) and cached, so Fig. 1a and 1b share them.
     """
     key = (float(lambda_), k)
     if key not in cache:
@@ -131,7 +130,7 @@ def save(fig, name):
     return paths
 
 
-# ---------- Figure 1: lambda ----------
+# ---------- Fig. 1a: lambda ----------
 
 
 def lambda_curve(folds, cache):
@@ -156,7 +155,7 @@ def lambda_curve(folds, cache):
             res["loss_va"][i, k] = calculate_loss_log(fold["y_va"], fold["tx_va"], w)
         print(f"  lambda {lambda_:.1e} done", flush=True)
 
-    print("\nFigure 1: F1 and loss (without penalty) against lambda, 5 folds")
+    print("\nFig. 1a: F1 and loss (without penalty) against lambda, 5 folds")
     print(
         f"{'lambda':>9s}  {'train F1':>15s}  {'validation F1':>15s}"
         f"  {'train loss':>10s}  {'val. loss':>10s}"
@@ -177,7 +176,7 @@ def lambda_curve(folds, cache):
 
 
 def draw_lambda(ax, res):
-    """Draw figure 1 on the axes ax."""
+    """Draw Fig. 1a on the axes ax."""
     for key, label, color in [
         ("f1_tr", "train", "tab:blue"),
         ("f1_va", "validation", "tab:red"),
@@ -194,7 +193,7 @@ def draw_lambda(ax, res):
     ax.grid(alpha=0.3)
 
 
-# ---------- Figure 2: decision threshold ----------
+# ---------- Fig. 1b: decision threshold ----------
 
 
 def threshold_curve(folds, cache):
@@ -202,7 +201,7 @@ def threshold_curve(folds, cache):
 
     Uses the out-of-fold probabilities sigmoid(tx_va @ w) of each fold
     (lambda = LAMBDA). The best threshold here is chosen on the validation
-    folds themselves, so this figure describes the tradeoff; it is not an
+    folds themselves, so the figure describes the tradeoff; it is not an
     unbiased estimate (cross_validate chooses the threshold on training data).
 
     Returns:
@@ -232,7 +231,7 @@ def threshold_curve(folds, cache):
     res["default_f1"] = np.mean(f1_default)
     share = [np.mean(probs[k] >= res["best"]) for k in folds]
 
-    print("\nFigure 2: validation scores against the probability threshold")
+    print("\nFig. 1b: validation scores against the probability threshold")
     print(
         f"threshold 0.5 (default): F1 = {res['default_f1']:.4f}"
         f" +/- {np.std(f1_default):.4f}"
@@ -252,7 +251,7 @@ def threshold_curve(folds, cache):
 
 
 def draw_threshold(ax, res):
-    """Draw figure 2 on the axes ax."""
+    """Draw Fig. 1b on the axes ax."""
     mean, std = res["f1"].mean(axis=1), res["f1"].std(axis=1)
     ax.plot(THRESHOLDS, mean, color="tab:red", label="F1")
     ax.fill_between(THRESHOLDS, mean - std, mean + std, color="tab:red", alpha=0.2)
@@ -289,7 +288,7 @@ def draw_threshold(ax, res):
     ax.grid(alpha=0.3)
 
 
-# ---------- Figure 3: convergence ----------
+# ---------- Convergence (numbers in the text) ----------
 
 
 def convergence_curve(fold):
@@ -317,7 +316,7 @@ def convergence_curve(fold):
     _, loss = reg_logistic_regression(y, tx, LAMBDA, np.zeros(tx.shape[1]), 500, GAMMA)
     assert abs(res[GAMMA][MAX_ITERS] - loss) < 1e-10, (res[GAMMA][MAX_ITERS], loss)
 
-    print("\nFigure 3: training loss (fold 1) after n gradient descent steps")
+    print("\nConvergence: training loss (fold 1) after n gradient descent steps")
     steps = [100, 250, 500, 1000]
     print(f"{'gamma':>6s}" + "".join(f"  {f'n={n}':>8s}" for n in steps))
     for gamma in GAMMAS:
@@ -330,24 +329,12 @@ def convergence_curve(fold):
     return res
 
 
-def draw_convergence(ax, res):
-    """Draw figure 3 on the axes ax."""
-    for gamma, losses in res.items():
-        ax.plot(np.arange(len(losses)), losses, label=f"$\\gamma$={gamma:g}")
-    ax.axvline(MAX_ITERS, color="gray", linestyle="--", label=f"run.py ({MAX_ITERS})")
-    ax.set_yscale("log")
-    ax.set_xlabel("gradient descent iteration")
-    ax.set_ylabel("training loss")
-    ax.legend(loc="upper right", ncol=2)
-    ax.grid(alpha=0.3, which="both")
-
-
 # ---------- Main ----------
 
 
 def main(mode):
-    """Compute and save the figures of the given mode."""
-    modes = ["lambda", "threshold", "convergence", "all"]
+    """Compute the numbers of the given mode, and save the figure for "figure"."""
+    modes = ["figure", "convergence", "all"]
     if mode not in modes:
         raise SystemExit(f"usage: python plots.py [{'|'.join(modes)}]")
 
@@ -361,34 +348,21 @@ def main(mode):
     folds = prepare_folds(x, y, names, which)
     del x  # only the preprocessed folds are needed from here on
 
-    cache, files = {}, []
-    if mode in ("lambda", "all"):
+    if mode in ("figure", "all"):
+        cache = {}
         lambda_res = lambda_curve(folds, cache)
-        fig, ax = plt.subplots(figsize=COLUMN_SIZE)
-        draw_lambda(ax, lambda_res)
-        files += save(fig, "lambda_cv")
-    if mode in ("threshold", "all"):
         threshold_res = threshold_curve(folds, cache)
-        fig, ax = plt.subplots(figsize=COLUMN_SIZE)
-        draw_threshold(ax, threshold_res)
-        files += save(fig, "threshold_f1")
-    if mode in ("convergence", "all"):
-        convergence_res = convergence_curve(folds[0])
-        fig, ax = plt.subplots(figsize=COLUMN_SIZE)
-        draw_convergence(ax, convergence_res)
-        files += save(fig, "convergence")
-    if mode == "all":
         fig, (ax1, ax2) = plt.subplots(1, 2, figsize=FULL_SIZE)
         draw_lambda(ax1, lambda_res)
         draw_threshold(ax2, threshold_res)
         ax1.set_title("(a) F1 against $\\lambda$")
         ax2.set_title("(b) F1 against the decision threshold")
         fig.tight_layout()
-        files += save(fig, "lambda_threshold")
-
-    print("\nFiles created:")
-    for path in files:
-        print(f"  {path}")
+        print("\nFiles created:")
+        for path in save(fig, "lambda_threshold"):
+            print(f"  {path}")
+    if mode in ("convergence", "all"):
+        convergence_curve(folds[0])
 
 
 if __name__ == "__main__":

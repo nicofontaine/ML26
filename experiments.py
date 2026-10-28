@@ -1,13 +1,13 @@
-"""Cross-validation experiments reported in the report.
+"""Cross-validation experiments behind the tables of the report.
 
 Run from the repository root, with the data in dataset/:
-    python experiments.py methods        # compare the six basic methods
-    python experiments.py improvements   # class weighting and interaction features
-    python experiments.py groups         # separate models per sex / age group
-    python experiments.py features       # ablation of the feature options
-    python experiments.py final          # plain vs previous vs new final model
+    python experiments.py methods        # Table I: the six basic methods
+    python experiments.py features       # ablation of the preprocessing options
+    python experiments.py improvements   # class weighting
+    python experiments.py final          # plain vs previous vs final model
 
-All experiments use the same 5 folds (seed 1), so their numbers are comparable.
+All experiments use the same 5 stratified folds (seed 1), so their numbers are
+comparable. The saved outputs are in results/.
 """
 
 import sys
@@ -32,6 +32,9 @@ DATA_PATH = "dataset"
 K_FOLD = 5
 SEED = 1
 
+# Preprocessing of the previous final model: interaction features only
+INTERACTIONS = {"interaction_columns": INTERACTION_COLUMNS}
+
 
 def load_data():
     """Load the training data, with labels converted to {0, 1}."""
@@ -42,71 +45,6 @@ def load_data():
 def zeros(tx):
     """Initial weights for the iterative methods."""
     return np.zeros(tx.shape[1])
-
-
-def compare_methods(x, y, names):
-    """5-fold F1 of the six methods of implementations.py."""
-    np.random.seed(0)  # SGD samples its data points with np.random
-    models = {
-        "least_squares": lambda y, tx: least_squares(y, tx)[0],
-        "ridge lambda=1e-4": lambda y, tx: ridge_regression(y, tx, 1e-4)[0],
-        "ridge lambda=1e-2": lambda y, tx: ridge_regression(y, tx, 1e-2)[0],
-        "mse_gd gamma=0.05 iters=500": lambda y, tx: mean_squared_error_gd(
-            y, tx, zeros(tx), 500, 0.05
-        )[0],
-        "mse_sgd gamma=0.001 iters=100000": lambda y, tx: mean_squared_error_sgd(
-            y, tx, zeros(tx), 100000, 0.001
-        )[0],
-        "logistic gamma=0.3 iters=500": lambda y, tx: logistic_regression(
-            y, tx, zeros(tx), 500, 0.3
-        )[0],
-        "logistic gamma=0.3 iters=2000": lambda y, tx: logistic_regression(
-            y, tx, zeros(tx), 2000, 0.3
-        )[0],
-    }
-    for lambda_ in [1e-5, 1e-4, 1e-3, 1e-2]:
-        models[f"reg_logistic lambda={lambda_:g} gamma=0.3 iters=500"] = (
-            lambda l: lambda y, tx: reg_logistic_regression(
-                y, tx, l, zeros(tx), 500, 0.3
-            )[0]
-        )(lambda_)
-    print_results(cross_validate(x, y, names, models, K_FOLD, SEED))
-
-
-def compare_improvements(x, y, names):
-    """5-fold F1 of class weighting, with and without interaction features."""
-    balanced = (1 - y.mean()) / y.mean()  # makes both classes weigh the same in total
-    models = {
-        f"pos_weight={pw:.3g}": (
-            lambda p: lambda y, tx: weighted_reg_logistic_regression(
-                y, tx, 1e-4, zeros(tx), 500, 0.3, p
-            )[0]
-        )(pw)
-        for pw in [1.0, 3.0, balanced]
-    }
-    for label, prep in [
-        ("no interactions", {}),
-        ("with interactions", {"interaction_columns": INTERACTION_COLUMNS}),
-    ]:
-        print(f"--- {label}")
-        print_results(cross_validate(x, y, names, models, K_FOLD, SEED, prep))
-
-
-def compare_groups(x, y, names):
-    """5-fold F1 of one model for everyone vs. separate models per group."""
-    models = {
-        "reg_logistic lambda=1e-4": lambda y, tx: reg_logistic_regression(
-            y, tx, 1e-4, zeros(tx), 500, 0.3
-        )[0]
-    }
-    for label, group in [
-        ("one model (current)", None),
-        ("one model per sex", "SEX"),
-        ("one model per age group (under / over 65)", "_AGE65YR"),
-    ]:
-        prep = {"interaction_columns": INTERACTION_COLUMNS, "group_column": group}
-        print(f"--- {label}")
-        print_results(cross_validate(x, y, names, models, K_FOLD, SEED, prep))
 
 
 def reg_logistic_model():
@@ -129,71 +67,89 @@ def print_differences(f1, pairs):
         )
 
 
-def compare_features(x, y, names):
-    """Ablation of the feature options of fit_preprocessing, on the same folds.
+def compare_methods(x, y, names):
+    """Table I: 5-fold F1 of the six methods of implementations.py."""
+    np.random.seed(0)  # SGD samples its data points with np.random
+    models = {
+        "least_squares": lambda y, tx: least_squares(y, tx)[0],
+        "ridge lambda=1e-4": lambda y, tx: ridge_regression(y, tx, 1e-4)[0],
+        "mse_gd gamma=0.05 iters=500": lambda y, tx: mean_squared_error_gd(
+            y, tx, zeros(tx), 500, 0.05
+        )[0],
+        "mse_sgd gamma=0.001 iters=100000": lambda y, tx: mean_squared_error_sgd(
+            y, tx, zeros(tx), 100000, 0.001
+        )[0],
+        "logistic gamma=0.3 iters=500": lambda y, tx: logistic_regression(
+            y, tx, zeros(tx), 500, 0.3
+        )[0],
+        "reg_logistic lambda=1e-4 gamma=0.3 iters=500": lambda y, tx: (
+            reg_logistic_regression(y, tx, 1e-4, zeros(tx), 500, 0.3)[0]
+        ),
+    }
+    print_results(cross_validate(x, y, names, models, K_FOLD, SEED))
 
-    Every variant is the model of run.py with interaction features only (the
-    "baseline", our previous final model) with one option changed. "final (all
-    options)" uses FINAL_PREPROCESSING, the settings of run.py. The "best
-    combination" combines every option whose mean F1 is above the baseline's; it
-    is chosen on these same folds, so its estimate is slightly optimistic.
+
+def compare_features(x, y, names):
+    """Ablation of the preprocessing options of the final model.
+
+    Every variant is the previous final model (reg_logistic with interaction
+    features, the "baseline") with one option added. "final (all options)" uses
+    FINAL_PREPROCESSING, the settings of run.py.
     """
-    models = reg_logistic_model()
-    base = {"interaction_columns": INTERACTION_COLUMNS}
     variants = {
         "baseline": {},
-        "age fix": {"age_fix": True},
         "flags for dropped columns": {"dropped_flags": True},
         "max_missing=0.95": {"max_missing": 0.95},
         "comorbidity count": {"comorbidity": True},
         "_AGE80 features": {"age80": True},
         "final (all options)": FINAL_PREPROCESSING,
     }
-
     f1 = {}
     for label, options in variants.items():
-        res = cross_validate(x, y, names, models, K_FOLD, SEED, {**base, **options})
+        prep = {**INTERACTIONS, **options}
+        res = cross_validate(x, y, names, reg_logistic_model(), K_FOLD, SEED, prep)
         f1[label] = res["reg_logistic"]["f1"]
         print(f"done: {label} ({f1[label].mean():.4f})", flush=True)
 
-    baseline = f1["baseline"]
-    better = [
-        label
-        for label in variants
-        if label not in ("baseline", "final (all options)")
-        and f1[label].mean() > baseline.mean()
-    ]
-    combined = dict(base)
-    for label in better:
-        combined.update(variants[label])
-    if not better:
-        print("no option beat the baseline, so there is no combination to test")
-    elif combined == {**base, **FINAL_PREPROCESSING}:
-        print(f"best combination ({' + '.join(better)}) = final (all options)")
-    else:
-        label = "best combination: " + " + ".join(better)
-        res = cross_validate(x, y, names, models, K_FOLD, SEED, combined)
-        f1[label] = res["reg_logistic"]["f1"]
-
     # Results table: change from baseline, and on how many folds it was better
+    baseline = f1["baseline"]
     print()
-    print(f"{'variant':60s} {'F1 (mean +/- std)':18s} {'change':>8s}  better folds")
+    print(f"{'variant':28s} {'F1 (mean +/- std)':18s} {'change':>8s}  better folds")
     for label, scores in f1.items():
         diff = scores - baseline
         print(
-            f"{label:60s} {scores.mean():.4f} +/- {scores.std():.4f}"
+            f"{label:28s} {scores.mean():.4f} +/- {scores.std():.4f}"
             f" {diff.mean():+8.4f}  {np.sum(diff > 0)}/{len(diff)}"
         )
-    print(f"\none fold standard deviation of the baseline: {baseline.std():.4f}")
+
+
+def compare_improvements(x, y, names):
+    """Class weighting (positive weight 1, 3 and balanced) with interaction features.
+
+    pos_weight=1 is exactly the previous final model.
+    """
+    balanced = (1 - y.mean()) / y.mean()  # makes both classes weigh the same in total
+    models = {
+        f"pos_weight={pw:.3g}": (
+            lambda p: lambda y, tx: weighted_reg_logistic_regression(
+                y, tx, 1e-4, zeros(tx), 500, 0.3, p
+            )[0]
+        )(pw)
+        for pw in [1.0, 3.0, balanced]
+    }
+    res = cross_validate(x, y, names, models, K_FOLD, SEED, INTERACTIONS)
+    print_results(res)
+    print()
+    f1 = {name: r["f1"] for name, r in res.items()}
+    unweighted, *weighted = f1
+    print_differences(f1, [(name, unweighted) for name in weighted])
 
 
 def compare_final(x, y, names):
-    """Per-fold F1 of plain reg_logistic, the previous and the new final model."""
+    """Per-fold F1 of plain reg_logistic, the previous and the final model."""
     setups = {
         "(a) reg_logistic, no interactions": {},
-        "(b) previous final (interactions)": {
-            "interaction_columns": INTERACTION_COLUMNS
-        },
+        "(b) previous final (interactions)": INTERACTIONS,
         "(c) new final (FINAL_PREPROCESSING)": FINAL_PREPROCESSING,
     }
     f1 = {}
@@ -212,13 +168,13 @@ def compare_final(x, y, names):
 
 
 if __name__ == "__main__":
-    experiment = sys.argv[1] if len(sys.argv) > 1 else "improvements"
-    x, y, names = load_data()
     experiments = {
         "methods": compare_methods,
-        "improvements": compare_improvements,
-        "groups": compare_groups,
         "features": compare_features,
+        "improvements": compare_improvements,
         "final": compare_final,
     }
-    experiments[experiment](x, y, names)
+    if len(sys.argv) != 2 or sys.argv[1] not in experiments:
+        raise SystemExit(f"usage: python experiments.py [{'|'.join(experiments)}]")
+    x, y, names = load_data()
+    experiments[sys.argv[1]](x, y, names)

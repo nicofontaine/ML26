@@ -99,10 +99,6 @@ INTERACTION_COLUMNS = [
 # Computed (non-integer) columns whose missing value is a single sentinel
 SENTINELS = {"DROCDY3_": 900, "_DRNKWEK": 99900, "MAXVO2_": 999, "FC60_": 999}
 
-# Extra sentinel used with age_fix=True: in _AGEG5YR (13 five-year age groups),
-# 14 means "don't know / refused", not an age group above 80
-AGE_SENTINELS = {"_AGEG5YR": 14}
-
 # "Has a doctor ever told you that you have ...?" questions, counted by the
 # comorbidity feature. Code 1 = yes in all of them. Codes that are not a plain
 # yes count as no: BPHIGH4 2 = only during pregnancy, 4 = borderline; DIABETE3
@@ -332,8 +328,6 @@ def fit_preprocessing(
     corr_sample=50000,
     seed=0,
     interaction_columns=None,
-    group_column=None,
-    age_fix=False,
     dropped_flags=False,
     comorbidity=False,
     age80=False,
@@ -342,8 +336,7 @@ def fit_preprocessing(
 
     Steps:
         1. drop administrative, redundant and outcome-routed columns
-        2. find survey codes for "don't know" / "refused" / "none" (age_fix: also
-           _AGEG5YR = 14)
+        2. find survey codes for "don't know" / "refused" / "none"
         3. drop columns with more than max_missing missing values, and constant columns
            (dropped_flags: keep a missing-value flag for the mostly-missing ones)
         4. split the columns into categorical (integer, 3 to max_categories values)
@@ -357,7 +350,6 @@ def fit_preprocessing(
         10. drop constant features, and features with |correlation| above corr_thresh
             with an earlier feature (flags and products come last, so they are
             dropped first)
-        11. optionally, the groups of group_column for separate models per group
 
     Args:
         x_train: training data, shape=(N, 321)
@@ -374,10 +366,6 @@ def fit_preprocessing(
         seed: random seed for the correlation sample
         interaction_columns: list of column names to build degree-2 features from,
             or None for no interaction features
-        group_column: column name (e.g. "SEX") whose values define groups that each
-            get their own weights (see transform), or None for one model for everyone
-        age_fix: whether to treat _AGEG5YR = 14 ("don't know / refused") as missing
-            (AGE_SENTINELS) instead of as the oldest age group
         dropped_flags: whether to keep a 0/1 "was missing" feature for each column
             dropped because of max_missing
         comorbidity: whether to add COMORBIDITY, the number of "yes" answers to the
@@ -394,9 +382,6 @@ def fit_preprocessing(
 
     x = x_train[:, [names.index(n) for n in columns]]
     codes = find_missing_codes(x, columns)
-    if age_fix:
-        for name, code in AGE_SENTINELS.items():
-            codes[name] = ([code], [])
     x = clean(x, columns, codes)
 
     params = {
@@ -487,41 +472,7 @@ def fit_preprocessing(
 
     params["selected"] = selected
     params["feature_names"] = [feature_names[j] for j in selected]
-
-    # Groups for separate models: every value with at least 1% of the rows is a
-    # group; rarer or missing values join the largest group
-    params["group"] = None
-    if group_column is not None:
-        col = x_train[:, [names.index(group_column)]]
-        col = clean(col, [group_column], codes)[:, 0]
-        values, counts = np.unique(col[~np.isnan(col)], return_counts=True)
-        common = counts >= 0.01 * len(col)
-        params["group"] = {
-            "column": group_column,
-            "values": values[common],
-            "default": int(np.argmax(counts[common])),
-        }
     return params
-
-
-def group_index(x, names, params):
-    """Group number (0 to G-1) of every row, for the per-group models.
-
-    Args:
-        x: data with all original columns, shape=(N, 321)
-        names: list of the original column names
-        params: output of fit_preprocessing, with a group_column
-
-    Returns:
-        group number of each row, shape=(N,)
-    """
-    group = params["group"]
-    col = x[:, [list(names).index(group["column"])]]
-    col = clean(col, [group["column"]], params["codes"])[:, 0]
-    index = np.full(len(col), group["default"])
-    for k, value in enumerate(group["values"]):
-        index[col == value] = k
-    return index
 
 
 def transform(x, names, params, add_bias=True):
@@ -534,21 +485,11 @@ def transform(x, names, params, add_bias=True):
         add_bias: whether to add a first column of ones
 
     Returns:
-        tx: standardized features, shape=(N, F) or (N, F + 1) with the bias;
-            with G groups, G times as many columns (see below)
+        tx: standardized features, shape=(N, F) or (N, F + 1) with the bias
     """
     x_enc, _ = encode(x, list(names), params)
     selected = params["selected"]
     tx = (x_enc[:, selected] - params["mean"][selected]) / params["std"][selected]
     if add_bias:
         tx = np.c_[np.ones(tx.shape[0]), tx]
-
-    # Separate models per group: one copy of all features (and the bias) per
-    # group, set to 0 for the rows outside that group. A linear model on this
-    # matrix has one independent weight vector per group, which is the same as
-    # training one model per group (with a shared lambda and step size).
-    if params.get("group") is not None:
-        index = group_index(x, names, params)
-        n_groups = len(params["group"]["values"])
-        tx = np.hstack([tx * (index == k)[:, None] for k in range(n_groups)])
     return tx
