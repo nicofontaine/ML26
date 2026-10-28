@@ -10,7 +10,7 @@ Run from the repository root, with the data in dataset/:
                  for several step sizes gamma
     all          all three, plus figures 1 and 2 side by side (full width)
 
-Same setup as run.py (interaction features, lambda = 1e-4, gamma = 0.3, 500
+Same setup as run.py (FINAL_PREPROCESSING, lambda = 1e-4, gamma = 0.3, 500
 iterations, w0 = 0, labels in {0, 1}) and the same 5 stratified folds as
 experiments.py (seed 1). The preprocessing is fitted once per fold, on its
 training part only, and shared by the three figures. Figures are saved as PDF
@@ -34,12 +34,8 @@ from implementations import (  # noqa: E402
     reg_logistic_regression,
     sigmoid,
 )
-from preprocessing import (  # noqa: E402
-    INTERACTION_COLUMNS,
-    fit_preprocessing,
-    load_feature_names,
-    transform,
-)
+from preprocessing import fit_preprocessing, load_feature_names, transform  # noqa: E402
+from run import FINAL_PREPROCESSING  # noqa: E402
 
 DATA_PATH = "dataset"
 FIGURE_DIR = "figures"
@@ -90,9 +86,7 @@ def prepare_folds(x, y, names, which):
     for k in which:
         va = k_indices[k]
         tr = np.concatenate([f for j, f in enumerate(k_indices) if j != k])
-        params = fit_preprocessing(
-            x[tr], names, interaction_columns=INTERACTION_COLUMNS
-        )
+        params = fit_preprocessing(x[tr], names, **FINAL_PREPROCESSING)
         folds[k] = {
             "tx_tr": transform(x[tr], names, params),
             "y_tr": y[tr],

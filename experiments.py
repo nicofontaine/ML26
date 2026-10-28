@@ -5,6 +5,7 @@ Run from the repository root, with the data in dataset/:
     python experiments.py improvements   # class weighting and interaction features
     python experiments.py groups         # separate models per sex / age group
     python experiments.py features       # ablation of the feature options
+    python experiments.py final          # plain vs previous vs new final model
 
 All experiments use the same 5 folds (seed 1), so their numbers are comparable.
 """
@@ -25,6 +26,7 @@ from implementations import (
 )
 from models import weighted_reg_logistic_regression
 from preprocessing import INTERACTION_COLUMNS, load_feature_names
+from run import FINAL_PREPROCESSING
 
 DATA_PATH = "dataset"
 K_FOLD = 5
@@ -107,19 +109,36 @@ def compare_groups(x, y, names):
         print_results(cross_validate(x, y, names, models, K_FOLD, SEED, prep))
 
 
-def compare_features(x, y, names):
-    """Ablation of the feature options of fit_preprocessing, on the same folds.
-
-    Every variant is the current model (reg_logistic, lambda=1e-4, gamma=0.3,
-    500 iterations, interaction features) with one option changed. The "best
-    combination" combines every option whose mean F1 is above the baseline's;
-    it is chosen on these same folds, so its estimate is slightly optimistic.
-    """
-    models = {
+def reg_logistic_model():
+    """The model of run.py: reg_logistic, lambda=1e-4, gamma=0.3, 500 iterations."""
+    return {
         "reg_logistic": lambda y, tx: reg_logistic_regression(
             y, tx, 1e-4, zeros(tx), 500, 0.3
         )[0]
     }
+
+
+def print_differences(f1, pairs):
+    """Per-fold differences between pairs of F1 arrays: mean, std, folds better."""
+    for new, old in pairs:
+        diff = f1[new] - f1[old]
+        print(
+            f"{new} vs {old}: mean difference {diff.mean():+.4f},"
+            f" std of the per-fold differences {diff.std():.4f},"
+            f" better on {np.sum(diff > 0)}/{len(diff)} folds"
+        )
+
+
+def compare_features(x, y, names):
+    """Ablation of the feature options of fit_preprocessing, on the same folds.
+
+    Every variant is the model of run.py with interaction features only (the
+    "baseline", our previous final model) with one option changed. "final (all
+    options)" uses FINAL_PREPROCESSING, the settings of run.py. The "best
+    combination" combines every option whose mean F1 is above the baseline's; it
+    is chosen on these same folds, so its estimate is slightly optimistic.
+    """
+    models = reg_logistic_model()
     base = {"interaction_columns": INTERACTION_COLUMNS}
     variants = {
         "baseline": {},
@@ -128,6 +147,7 @@ def compare_features(x, y, names):
         "max_missing=0.95": {"max_missing": 0.95},
         "comorbidity count": {"comorbidity": True},
         "_AGE80 features": {"age80": True},
+        "final (all options)": FINAL_PREPROCESSING,
     }
 
     f1 = {}
@@ -140,17 +160,20 @@ def compare_features(x, y, names):
     better = [
         label
         for label in variants
-        if label != "baseline" and f1[label].mean() > baseline.mean()
+        if label not in ("baseline", "final (all options)")
+        and f1[label].mean() > baseline.mean()
     ]
-    if better:
-        combined = {}
-        for label in better:
-            combined.update(variants[label])
-        label = "best combination: " + " + ".join(better)
-        res = cross_validate(x, y, names, models, K_FOLD, SEED, {**base, **combined})
-        f1[label] = res["reg_logistic"]["f1"]
-    else:
+    combined = dict(base)
+    for label in better:
+        combined.update(variants[label])
+    if not better:
         print("no option beat the baseline, so there is no combination to test")
+    elif combined == {**base, **FINAL_PREPROCESSING}:
+        print(f"best combination ({' + '.join(better)}) = final (all options)")
+    else:
+        label = "best combination: " + " + ".join(better)
+        res = cross_validate(x, y, names, models, K_FOLD, SEED, combined)
+        f1[label] = res["reg_logistic"]["f1"]
 
     # Results table: change from baseline, and on how many folds it was better
     print()
@@ -161,7 +184,31 @@ def compare_features(x, y, names):
             f"{label:60s} {scores.mean():.4f} +/- {scores.std():.4f}"
             f" {diff.mean():+8.4f}  {np.sum(diff > 0)}/{len(diff)}"
         )
-    print(f"\nthreshold for changing the defaults: change > {baseline.std():.4f}")
+    print(f"\none fold standard deviation of the baseline: {baseline.std():.4f}")
+
+
+def compare_final(x, y, names):
+    """Per-fold F1 of plain reg_logistic, the previous and the new final model."""
+    setups = {
+        "(a) reg_logistic, no interactions": {},
+        "(b) previous final (interactions)": {
+            "interaction_columns": INTERACTION_COLUMNS
+        },
+        "(c) new final (FINAL_PREPROCESSING)": FINAL_PREPROCESSING,
+    }
+    f1 = {}
+    for label, prep in setups.items():
+        res = cross_validate(x, y, names, reg_logistic_model(), K_FOLD, SEED, prep)
+        f1[label] = res["reg_logistic"]["f1"]
+        folds = " ".join(f"{f:.4f}" for f in f1[label])
+        print(
+            f"{label:38s} F1 = {f1[label].mean():.4f} +/- {f1[label].std():.4f}"
+            f"   folds: {folds}",
+            flush=True,
+        )
+    a, b, c = setups
+    print()
+    print_differences(f1, [(c, b), (c, a), (b, a)])
 
 
 if __name__ == "__main__":
@@ -172,5 +219,6 @@ if __name__ == "__main__":
         "improvements": compare_improvements,
         "groups": compare_groups,
         "features": compare_features,
+        "final": compare_final,
     }
     experiments[experiment](x, y, names)

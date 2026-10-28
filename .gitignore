@@ -6,3 +6,6 @@ __pycache__/
 # Course test suite (run from a local copy, not part of the submission) and editor settings
 grading_tests/
 .vscode/
+
+# Earlier submissions kept locally for comparison
+submission_v*.csv
